@@ -1,6 +1,9 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -35,6 +38,40 @@ namespace Microsoft.EntityFrameworkCore.Design
         ///     Parameter object containing dependencies for this service.
         /// </summary>
         protected virtual AnnotationCodeGeneratorDependencies Dependencies { get; }
+
+        /// <summary>
+        ///     For the given property annotations, removes annotations that are either handled by convention or
+        ///     have a corresponding fluent API, and return a list of fluent API calls for the latter.
+        /// </summary>
+        /// <param name="property"> The <see cref="IProperty" /> for which code should be generated. </param>
+        /// <param name="annotations">
+        ///     The list of annotations to handle. Handled annotations are removed from this list, and
+        ///     unhandled ones kept.
+        /// </param>
+        /// <returns> A list of <see cref="MethodCallCodeFragment"/> instances for handled annotations. </returns>
+        public virtual List<MethodCallCodeFragment> HandleAnnotations(IProperty property, List<IAnnotation> annotations)
+        {
+            var methodCallCodeFragments = new List<MethodCallCodeFragment>();
+            foreach (var annotation in annotations.ToList())
+            {
+                if (annotation.Value == null
+                    || IsHandledByConvention(property, annotation))
+                {
+                    annotations.Remove(annotation);
+                }
+                else
+                {
+                    var methodCall = GenerateFluentApi(property, annotation);
+                    if (methodCall != null)
+                    {
+                        annotations.Remove(annotation);
+                        methodCallCodeFragments.Add(methodCall);
+                    }
+                }
+            }
+
+            return methodCallCodeFragments;
+        }
 
         /// <summary>
         ///     Returns <see langword="false" /> unless overridden to do otherwise.

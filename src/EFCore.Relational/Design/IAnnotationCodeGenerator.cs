@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
+using System.Collections.Generic;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -14,6 +16,18 @@ namespace Microsoft.EntityFrameworkCore.Design
     /// </summary>
     public interface IAnnotationCodeGenerator
     {
+        /// <summary>
+        ///     For the given property annotations, removes annotations that are either handled by convention or
+        ///     have a corresponding fluent API, and return a list of fluent API calls for the latter.
+        /// </summary>
+        /// <param name="property"> The <see cref="IProperty" /> for which code should be generated. </param>
+        /// <param name="annotations">
+        ///     The list of annotations to handle. Handled annotations are removed from this list, and
+        ///     unhandled ones kept.
+        /// </param>
+        /// <returns> A list of <see cref="MethodCallCodeFragment"/> instances for handled annotations. </returns>
+        List<MethodCallCodeFragment> HandleAnnotations(IProperty property, List<IAnnotation> annotations);
+
         /// <summary>
         ///     Checks if the given <see cref="IAnnotation" /> is handled by convention when
         ///     applied to the given <see cref="IModel" />.
@@ -60,6 +74,7 @@ namespace Microsoft.EntityFrameworkCore.Design
         ///     <see langword="true"/> if the annotation is handled by convention;
         ///     <see langword="false"/> if code must be generated.
         /// </returns>
+        [Obsolete("Or just remove?")]
         bool IsHandledByConvention([NotNull] IProperty property, [NotNull] IAnnotation annotation);
 
         /// <summary>
@@ -116,6 +131,7 @@ namespace Microsoft.EntityFrameworkCore.Design
         /// <param name="property"> The <see cref="IProperty" /> for which code should be generated. </param>
         /// <param name="annotation"> The <see cref="IAnnotation" /> for which code should be generated.</param>
         /// <returns> The generated code. </returns>
+        [Obsolete("Or just remove?")]
         MethodCallCodeFragment GenerateFluentApi([NotNull] IProperty property, [NotNull] IAnnotation annotation);
 
         /// <summary>

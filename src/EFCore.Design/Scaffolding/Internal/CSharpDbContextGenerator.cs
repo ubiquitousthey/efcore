@@ -643,6 +643,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
 
             var annotations = property.GetAnnotations().ToList();
 
+            // First, handle built-in annotations
             RemoveAnnotation(ref annotations, CoreAnnotationNames.MaxLength);
             RemoveAnnotation(ref annotations, CoreAnnotationNames.Precision);
             RemoveAnnotation(ref annotations, CoreAnnotationNames.Scale);
@@ -802,27 +803,15 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                 lines.Add($".{nameof(PropertyBuilder.IsConcurrencyToken)}()");
             }
 
-            var annotationsToRemove = new List<IAnnotation>();
+            // Pass the remaining annotations to the provider's annotation code generator, which will remove
+            // annotations that are handled by convention, and return fluent API calls for others.
+            lines.AddRange(
+                _annotationCodeGenerator.HandleAnnotations(property, annotations)
+                    .Select(m => _code.Fragment(m)));
 
-            foreach (var annotation in annotations)
-            {
-                if (annotation.Value == null
-                    || _annotationCodeGenerator.IsHandledByConvention(property, annotation))
-                {
-                    annotationsToRemove.Add(annotation);
-                }
-                else
-                {
-                    var methodCall = _annotationCodeGenerator.GenerateFluentApi(property, annotation);
-                    if (methodCall != null)
-                    {
-                        lines.Add(_code.Fragment(methodCall));
-                        annotationsToRemove.Add(annotation);
-                    }
-                }
-            }
-
-            lines.AddRange(GenerateAnnotations(annotations.Except(annotationsToRemove)));
+            // Any remaining annotations which were unhandled by the annotation code generator above
+            // are generated as raw annotations.
+            lines.AddRange(GenerateAnnotations(annotations));
 
             switch (lines.Count)
             {

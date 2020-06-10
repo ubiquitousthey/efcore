@@ -524,6 +524,8 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
 
             var annotations = property.GetAnnotations().ToList();
 
+            // First, handle built-in annotations
+
             GenerateFluentApiForAnnotation(
                 ref annotations,
                 RelationalAnnotationNames.ColumnName,
@@ -616,6 +618,17 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                 CoreAnnotationNames.ValueConverter,
                 CoreAnnotationNames.ProviderClrType);
 
+            // Pass the remaining annotations to the provider's annotation code generator, which will remove
+            foreach (var methodCallCodeFragment in
+                Dependencies.AnnotationCodeGenerator.HandleAnnotations(property, annotations))
+            {
+                stringBuilder
+                    .AppendLine()
+                    .Append(Code.Fragment(methodCallCodeFragment));
+            }
+
+            // Any remaining annotations which were unhandled by the annotation code generator above
+            // are generated as raw annotations.
             GenerateAnnotations(annotations, stringBuilder);
         }
 

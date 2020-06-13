@@ -25,12 +25,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
         {
             if (_contextPool != null)
             {
-                if (!_contextPool.Return(this))
-                {
-                    ((IDbContextPoolable)this).SetPool(null);
-                    base.Dispose();
-                }
-
+                _contextPool.ContextDisposed(this);
                 _contextPool = null;
             }
             else

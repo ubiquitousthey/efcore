@@ -757,8 +757,11 @@ namespace Microsoft.EntityFrameworkCore
 
         private bool DisposeSync()
         {
-            if (_dbContextPool == null
-                && !_disposed)
+            if (_dbContextPool != null)
+            {
+                _dbContextPool.ContextDisposed(this);
+            }
+            else if (!_disposed)
             {
                 _dbContextDependencies?.InfrastructureLogger.ContextDisposed(this);
 

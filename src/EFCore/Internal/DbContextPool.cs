@@ -26,9 +26,9 @@ namespace Microsoft.EntityFrameworkCore.Internal
     {
         private const int DefaultPoolSize = 32;
 
-        private readonly ConcurrentQueue<TContext> _pool = new ConcurrentQueue<TContext>();
+        private readonly ConcurrentQueue<DbContext> _pool = new ConcurrentQueue<DbContext>();
 
-        private readonly Func<TContext> _activator;
+        private readonly Func<DbContext> _activator;
 
         private int _maxSize;
         private int _count;
@@ -55,7 +55,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             {
                 _contextPool = contextPool;
 
-                Context = _contextPool.Rent();
+                Context = (TContext)_contextPool.Rent();
             }
 
             /// <summary>
@@ -70,12 +70,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             {
                 if (_contextPool != null)
                 {
-                    if (!_contextPool.Return(Context))
-                    {
-                        ((IDbContextPoolable)Context).SetPool(null);
-                        Context.Dispose();
-                    }
-
+                    _contextPool.Return(Context);
                     _contextPool = null;
                     Context = null;
                 }
@@ -85,12 +80,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             {
                 if (_contextPool != null)
                 {
-                    if (!_contextPool.Return(Context))
-                    {
-                        ((IDbContextPoolable)Context).SetPool(null);
-                        await Context.DisposeAsync().ConfigureAwait(false);
-                    }
-
+                    await _contextPool.ReturnAsync(Context).ConfigureAwait(false);
                     _contextPool = null;
                     Context = null;
                 }
@@ -103,7 +93,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     any release. You should only use it directly in your code with extreme caution and knowing that
         ///     doing so can result in application failures when updating to a new Entity Framework Core release.
         /// </summary>
-        public DbContextPool([NotNull] DbContextOptions options)
+        public DbContextPool([NotNull] DbContextOptions<TContext> options)
         {
             _maxSize = options.FindExtension<CoreOptionsExtension>()?.MaxPoolSize ?? DefaultPoolSize;
 
@@ -118,7 +108,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             }
         }
 
-        private static Func<TContext> CreateActivator(DbContextOptions options)
+        private static Func<DbContext> CreateActivator(DbContextOptions<TContext> options)
         {
             var constructors
                 = typeof(TContext).GetTypeInfo().DeclaredConstructors
@@ -149,7 +139,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     any release. You should only use it directly in your code with extreme caution and knowing that
         ///     doing so can result in application failures when updating to a new Entity Framework Core release.
         /// </summary>
-        public virtual TContext Rent()
+        public virtual DbContext Rent()
         {
             if (_pool.TryDequeue(out var context))
             {
@@ -181,22 +171,9 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     any release. You should only use it directly in your code with extreme caution and knowing that
         ///     doing so can result in application failures when updating to a new Entity Framework Core release.
         /// </summary>
-        public virtual bool Return([NotNull] TContext context)
+        public virtual void ContextDisposed(DbContext context)
         {
-            if (Interlocked.Increment(ref _count) <= _maxSize)
-            {
-                ((IDbContextPoolable)context).ResetState();
-
-                _pool.Enqueue(context);
-
-                return true;
-            }
-
-            Interlocked.Decrement(ref _count);
-
-            Check.DebugAssert(_maxSize == 0 || _pool.Count <= _maxSize, $"_maxSize is {_maxSize}");
-
-            return false;
+            // No-op when not using a standalone pool, since disposal of the service scope triggers release
         }
 
         /// <summary>
@@ -205,7 +182,19 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     any release. You should only use it directly in your code with extreme caution and knowing that
         ///     doing so can result in application failures when updating to a new Entity Framework Core release.
         /// </summary>
-        DbContext IDbContextPool.Rent() => Rent();
+        protected virtual void Return([NotNull] DbContext context)
+        {
+            if (Interlocked.Increment(ref _count) <= _maxSize)
+            {
+                ((IDbContextPoolable)context).ResetState();
+
+                _pool.Enqueue(context);
+            }
+            else
+            {
+                PooledReturn(context);
+            }
+        }
 
         /// <summary>
         ///     This is an internal API that supports the Entity Framework Core infrastructure and not subject to
@@ -213,7 +202,29 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     any release. You should only use it directly in your code with extreme caution and knowing that
         ///     doing so can result in application failures when updating to a new Entity Framework Core release.
         /// </summary>
-        bool IDbContextPool.Return(DbContext context) => Return((TContext)context);
+        private async ValueTask ReturnAsync([NotNull] DbContext context)
+        {
+            if (Interlocked.Increment(ref _count) <= _maxSize)
+            {
+                await ((IDbContextPoolable)context).ResetStateAsync().ConfigureAwait(false);
+
+                _pool.Enqueue(context);
+            }
+            else
+            {
+                PooledReturn(context);
+            }
+        }
+
+        private void PooledReturn(DbContext context)
+        {
+            Interlocked.Decrement(ref _count);
+
+            Check.DebugAssert(_maxSize == 0 || _pool.Count <= _maxSize, $"_maxSize is {_maxSize}");
+
+            ((IDbContextPoolable)context).SetPool(null);
+            context.Dispose();
+        }
 
         /// <summary>
         ///     This is an internal API that supports the Entity Framework Core infrastructure and not subject to

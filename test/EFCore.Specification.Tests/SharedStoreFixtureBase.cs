@@ -25,7 +25,7 @@ namespace Microsoft.EntityFrameworkCore
         private IDbContextPool _contextPool;
 
         private IDbContextPool ContextPool
-            => _contextPool ??= (IDbContextPool)ServiceProvider.GetRequiredService(typeof(DbContextPool<>).MakeGenericType(ContextType));
+            => _contextPool ??= (IDbContextPool)ServiceProvider.GetRequiredService(typeof(StandaloneDbContextPool<>).MakeGenericType(ContextType));
 
         private ListLoggerFactory _listLoggerFactory;
 

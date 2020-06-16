@@ -467,7 +467,7 @@ namespace Microsoft.Data.Sqlite
             }
 
             using var reader = ExecuteReader();
-            return reader.Read()
+            return reader.HasRows && reader.Read()
                 ? reader.GetValue(0)
                 : null;
         }
